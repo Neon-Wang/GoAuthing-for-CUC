@@ -18,7 +18,7 @@ import (
 	"github.com/juju/loggo"
 	"github.com/urfave/cli/v3"
 
-	"github.com/Neon-Wang/GoAuthing-for-CUC/libauth"
+	"github.com/z4yx/GoAuthing/libauth"
 )
 
 type Settings struct {
