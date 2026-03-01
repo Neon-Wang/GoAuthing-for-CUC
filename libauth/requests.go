@@ -183,7 +183,7 @@ func GetAcID(V6 bool) (acID string, err error) {
 	acID = ""
 	var resp *http.Response
 	var body []byte
-	url := "http://login.tsinghua.edu.cn/index_1.html"
+	url := "http://www.baidu.com"
 	if V6 {
 		url = "http://mirrors6.tuna.tsinghua.edu.cn/"
 	}

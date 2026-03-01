@@ -216,7 +216,8 @@ func runHook(c *cli.Command) {
 	}
 }
 
-func keepAliveLoop(c *cli.Command, campusOnly bool) (ret error) {
+// reLogin 在连续探活失败时被调用以尝试重新认证；为 nil 则仅重试不自动登录
+func keepAliveLoop(c *cli.Command, campusOnly bool, reLogin func() error) (ret error) {
 	logger.Infof("Accessing websites periodically to keep you online")
 
 	accessTarget := func(url string, ipv6 bool) (ret error) {
@@ -272,13 +273,24 @@ func keepAliveLoop(c *cli.Command, campusOnly bool) (ret error) {
 		if ret = accessTarget(target, settings.V6); ret != nil {
 			errorCount++
 			if errorCount >= settings.OnRetry {
-				ret = fmt.Errorf("keepAlive request error (re-login might be required): %w\n", ret)
-				break
+				if reLogin != nil {
+					logger.Infof("keepAlive failed repeatedly, attempting deauth then auth...\n")
+					if err := reLogin(); err != nil {
+						logger.Warningf("deauth/auth failed: %s (will keep retrying)\n", err)
+					} else {
+						logger.Infof("deauth and auth succeeded, resuming keep-alive\n")
+						errorCount = 0
+					}
+				} else {
+					logger.Warningf("keepAlive request error (re-login might be required, will keep retrying): %s\n", ret)
+				}
+				errorCount = settings.OnRetry // 不再增加，避免溢出
 			} else {
 				logger.Infof("keepAlive request error (will retry): %s\n", ret)
 			}
 		} else {
 			errorCount = 0
+			logger.Infof("keepAlive request succeeded\n")
 		}
 		// Consumes ~5MB per day when settings.OnIntrvl == 3
 		time.Sleep(time.Duration(settings.OnIntrvl) * time.Second)
@@ -324,7 +336,20 @@ func authUtil(c *cli.Command, logout bool) error {
 		if online && !logout {
 			logger.Infof("Currently online!")
 			if settings.KeepOn {
-				return keepAliveLoop(c, settings.Campus)
+				var reLogin func() error
+				if settings.Username != "" && settings.Password != "" {
+					u := settings.Username
+					if settings.Campus {
+						u += "@tsinghua"
+					}
+					reLogin = func() error {
+						time.Sleep(5 * time.Second)
+						_ = libauth.LoginLogout(u, settings.Password, host, true, settings.Ip, acID)
+						time.Sleep(5 * time.Second)
+						return libauth.LoginLogout(u, settings.Password, host, false, settings.Ip, acID)
+					}
+				}
+				return keepAliveLoop(c, settings.Campus, reLogin)
 			}
 			return nil
 		} else if !online && logout {
@@ -366,7 +391,16 @@ func authUtil(c *cli.Command, logout bool) error {
 			if len(settings.Ip) != 0 {
 				logger.Errorf("Cannot keep another IP online\n")
 			} else {
-				return keepAliveLoop(c, settings.Campus)
+				var reLogin func() error
+				if settings.Username != "" && settings.Password != "" {
+					reLogin = func() error {
+						time.Sleep(5 * time.Second)
+						_ = libauth.LoginLogout(settings.Username, settings.Password, host, true, settings.Ip, acID)
+						time.Sleep(5 * time.Second)
+						return libauth.LoginLogout(settings.Username, settings.Password, host, false, settings.Ip, acID)
+					}
+				}
+				return keepAliveLoop(c, settings.Campus, reLogin)
 			}
 		}
 	} else {
@@ -400,7 +434,29 @@ func cmdKeepalive(ctx context.Context, c *cli.Command) error {
 		logger.Errorf("Parse setting error: %s\n", err)
 		os.Exit(1)
 	}
-	err = keepAliveLoop(c, c.Bool("campus-only"))
+	domain := settings.Host
+	if domain == "" {
+		domain = "net.cuc.edu.cn"
+	}
+	host := libauth.NewUrlProvider(domain, settings.Insecure)
+	acID := settings.AcID
+	if acID == "" {
+		acID = "1"
+	}
+	var reLogin func() error
+	if settings.Username != "" && settings.Password != "" {
+		u := settings.Username
+		if settings.Campus {
+			u += "@tsinghua"
+		}
+		reLogin = func() error {
+			time.Sleep(5 * time.Second)
+			_ = libauth.LoginLogout(u, settings.Password, host, true, settings.Ip, acID)
+			time.Sleep(5 * time.Second)
+			return libauth.LoginLogout(u, settings.Password, host, false, settings.Ip, acID)
+		}
+	}
+	err = keepAliveLoop(c, c.Bool("campus-only"), reLogin)
 	if err != nil {
 		logger.Errorf("Keepalive error: %s\n", err)
 		os.Exit(1)
