@@ -1,12 +1,12 @@
 [Unit]
-Description=Authenticating utility for auth.tsinghua.edu.cn
+Description=Authenticating utility for net.cuc.edu.cn
 StartLimitIntervalSec=0
 
 [Service]
-# default config is in ~/.auth-thu
-ExecStartPre=-/usr/local/bin/auth-thu -D deauth
-ExecStartPre=-/usr/local/bin/auth-thu -D auth
-ExecStart=/usr/local/bin/auth-thu online
+# default config is in ~/.auth-cuc
+ExecStartPre=-/usr/local/bin/auth-cuc -D deauth
+ExecStartPre=-/usr/local/bin/auth-cuc -D auth
+ExecStart=/usr/local/bin/auth-cuc online
 User=%i
 Restart=always
 RestartSec=5

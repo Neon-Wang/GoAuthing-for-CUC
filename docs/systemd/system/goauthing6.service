@@ -1,11 +1,11 @@
 [Unit]
-Description=Authenticating utility for auth.tsinghua.edu.cn
+Description=Authenticating utility for net.cuc.edu.cn
 StartLimitIntervalSec=0
 
 [Service]
-ExecStartPre=-/usr/local/bin/auth-thu -c /etc/goauthing.json -D deauth -6
-ExecStartPre=-/usr/local/bin/auth-thu -c /etc/goauthing.json -D auth -6
-ExecStart=/usr/local/bin/auth-thu -c /etc/goauthing.json online -6
+ExecStartPre=-/usr/local/bin/auth-cuc -c /etc/goauthing.json -D deauth -6
+ExecStartPre=-/usr/local/bin/auth-cuc -c /etc/goauthing.json -D auth -6
+ExecStart=/usr/local/bin/auth-cuc -c /etc/goauthing.json online -6
 User=nobody
 Restart=always
 RestartSec=5

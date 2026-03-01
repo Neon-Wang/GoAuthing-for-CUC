@@ -18,7 +18,7 @@ import (
 	"github.com/juju/loggo"
 	"github.com/urfave/cli/v3"
 
-	"github.com/z4yx/GoAuthing/libauth"
+	"github.com/Neon-Wang/GoAuthing-for-CUC/libauth"
 )
 
 type Settings struct {
@@ -39,7 +39,7 @@ type Settings struct {
 	Campus   bool   `json:"campusOnly"`
 }
 
-var logger = loggo.GetLogger("auth-thu")
+var logger = loggo.GetLogger("auth-cuc")
 var settings Settings
 
 func parseSettingsFile(path string) error {
@@ -149,11 +149,11 @@ func requestPasswd() (err error) {
 
 func setLoggerLevel(debug bool, daemon bool) {
 	if daemon {
-		_ = loggo.ConfigureLoggers("auth-thu=ERROR;libauth=ERROR")
+		_ = loggo.ConfigureLoggers("auth-cuc=ERROR;libauth=ERROR")
 	} else if debug {
-		_ = loggo.ConfigureLoggers("auth-thu=DEBUG;libauth=DEBUG")
+		_ = loggo.ConfigureLoggers("auth-cuc=DEBUG;libauth=DEBUG")
 	} else {
-		_ = loggo.ConfigureLoggers("auth-thu=INFO;libauth=INFO")
+		_ = loggo.ConfigureLoggers("auth-cuc=INFO;libauth=INFO")
 	}
 }
 
@@ -168,13 +168,13 @@ func locateConfigFile(c *cli.Command) (cf string) {
 	if len(xdgConfigHome) == 0 {
 		xdgConfigHome = path.Join(homedir, ".config")
 	}
-	cf = path.Join(xdgConfigHome, "auth-thu")
+	cf = path.Join(xdgConfigHome, "auth-cuc")
 	_, err := os.Stat(cf)
 	if !os.IsNotExist(err) {
 		return
 	}
 
-	cf = path.Join(homedir, ".auth-thu")
+	cf = path.Join(homedir, ".auth-cuc")
 	_, err = os.Stat(cf)
 	if !os.IsNotExist(err) {
 		return
@@ -246,7 +246,7 @@ func keepAliveLoop(c *cli.Command, campusOnly bool) (ret error) {
 		logger.Debugf("HTTP status code %d\n", resp.StatusCode)
 		return
 	}
-	targetInside := "https://www.tsinghua.edu.cn/"
+	targetInside := "https://www.cuc.edu.cn/"
 	targetOutside := "https://www.baidu.com/"
 
 	stop := make(chan int, 1)
@@ -298,9 +298,9 @@ func authUtil(c *cli.Command, logout bool) error {
 	domain := settings.Host
 	if len(settings.Host) == 0 {
 		if settings.V6 {
-			domain = "auth6.tsinghua.edu.cn"
+			domain = "net.cuc.edu.cn"
 		} else {
-			domain = "auth4.tsinghua.edu.cn"
+			domain = "net.cuc.edu.cn"
 		}
 	}
 
@@ -410,18 +410,18 @@ func cmdKeepalive(ctx context.Context, c *cli.Command) error {
 
 func main() {
 	cmd := &cli.Command{
-		Name: "auth-thu",
-		UsageText: `auth-thu [options]
-	 auth-thu [options] auth [auth_options]
-	 auth-thu [options] deauth [auth_options]
-	 auth-thu [options] online [online_options]`,
-		Usage:    "Authenticating utility for Tsinghua",
+		Name: "auth-cuc",
+		UsageText: `auth-cuc [options]
+	 auth-cuc [options] auth [auth_options]
+	 auth-cuc [options] deauth [auth_options]
+	 auth-cuc [options] online [online_options]`,
+		Usage:    "Authenticating utility for CUC",
 		Version:  "2.3.5",
 		HideHelp: true,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "username", Aliases: []string{"u"}, Usage: "your TUNET account `name`"},
-			&cli.StringFlag{Name: "password", Aliases: []string{"p"}, Usage: "your TUNET `password`"},
-			&cli.StringFlag{Name: "config-file", Aliases: []string{"c"}, Usage: "`path` to your config file, default ~/.auth-thu"},
+			&cli.StringFlag{Name: "username", Aliases: []string{"u"}, Usage: "your CUC account `name`"},
+			&cli.StringFlag{Name: "password", Aliases: []string{"p"}, Usage: "your CUC `password`"},
+			&cli.StringFlag{Name: "config-file", Aliases: []string{"c"}, Usage: "`path` to your config file, default ~/.auth-cuc"},
 			&cli.StringFlag{Name: "hook-success", Usage: "command line to be executed in shell after successful login/out"},
 			&cli.IntFlag{Name: "online-interval", Aliases: []string{"I"}, Usage: "the interval between each keepAlive request (s)", Value: 3},
 			&cli.BoolFlag{Name: "daemonize", Aliases: []string{"D"}, Usage: "run without reading username/password from standard input; less log"},
@@ -431,12 +431,12 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "auth",
-				Usage: "(default) Auth via auth4/6.tsinghua",
+				Usage: "(default) Auth via net.cuc",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "ip", Usage: "authenticating for specified IP address"},
 					&cli.BoolFlag{Name: "no-check", Aliases: []string{"n"}, Usage: "skip online checking, always send login request"},
 					&cli.BoolFlag{Name: "logout", Aliases: []string{"o"}, Usage: "de-auth of the online account (behaves the same as deauth command, for backward-compatibility)"},
-					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "authenticating for IPv6 (auth6.tsinghua)"},
+					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "authenticating for IPv6 (net.cuc)"},
 					&cli.BoolFlag{Name: "campus-only", Aliases: []string{"C"}, Usage: "auth only, no auto-login (v4 only)"},
 					&cli.StringFlag{Name: "host", Usage: "use customized hostname of srun4000"},
 					&cli.BoolFlag{Name: "insecure", Usage: "use http instead of https"},
@@ -448,11 +448,11 @@ func main() {
 			},
 			{
 				Name:  "deauth",
-				Usage: "De-auth via auth4/6.tsinghua",
+				Usage: "De-auth via net.cuc",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "ip", Usage: "authenticating for specified IP address"},
 					&cli.BoolFlag{Name: "no-check", Aliases: []string{"n"}, Usage: "skip online checking, always send logout request"},
-					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "authenticating for IPv6 (auth6.tsinghua)"},
+					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "authenticating for IPv6 (net.cuc)"},
 					&cli.StringFlag{Name: "host", Usage: "use customized hostname of srun4000"},
 					&cli.BoolFlag{Name: "insecure", Usage: "use http instead of https"},
 					&cli.StringFlag{Name: "ac-id", Usage: "use specified ac_id"},
@@ -486,6 +486,7 @@ func main() {
 			"Jiajie Chen <c@jia.je>",
 			"KomeijiOcean <oceans2000@126.com>",
 			"Sharzy L <me@sharzy.in>",
+			"Modified by Neon Wang <i@jiashengfan.space>",
 		},
 	}
 
