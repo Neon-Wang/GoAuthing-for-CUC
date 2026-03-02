@@ -338,15 +338,12 @@ func authUtil(c *cli.Command, logout bool) error {
 			if settings.KeepOn {
 				var reLogin func() error
 				if settings.Username != "" && settings.Password != "" {
-					u := settings.Username
-					if settings.Campus {
-						u += "@tsinghua"
-					}
 					reLogin = func() error {
+						if err := authUtil(c, true); err != nil {
+							return err
+						}
 						time.Sleep(5 * time.Second)
-						_ = libauth.LoginLogout(u, settings.Password, host, true, settings.Ip, acID)
-						time.Sleep(5 * time.Second)
-						return libauth.LoginLogout(u, settings.Password, host, false, settings.Ip, acID)
+						return authUtil(c, false)
 					}
 				}
 				return keepAliveLoop(c, settings.Campus, reLogin)
@@ -394,10 +391,11 @@ func authUtil(c *cli.Command, logout bool) error {
 				var reLogin func() error
 				if settings.Username != "" && settings.Password != "" {
 					reLogin = func() error {
+						if err := authUtil(c, true); err != nil {
+							return err
+						}
 						time.Sleep(5 * time.Second)
-						_ = libauth.LoginLogout(settings.Username, settings.Password, host, true, settings.Ip, acID)
-						time.Sleep(5 * time.Second)
-						return libauth.LoginLogout(settings.Username, settings.Password, host, false, settings.Ip, acID)
+						return authUtil(c, false)
 					}
 				}
 				return keepAliveLoop(c, settings.Campus, reLogin)
@@ -434,26 +432,14 @@ func cmdKeepalive(ctx context.Context, c *cli.Command) error {
 		logger.Errorf("Parse setting error: %s\n", err)
 		os.Exit(1)
 	}
-	domain := settings.Host
-	if domain == "" {
-		domain = "net.cuc.edu.cn"
-	}
-	host := libauth.NewUrlProvider(domain, settings.Insecure)
-	acID := settings.AcID
-	if acID == "" {
-		acID = "1"
-	}
 	var reLogin func() error
 	if settings.Username != "" && settings.Password != "" {
-		u := settings.Username
-		if settings.Campus {
-			u += "@tsinghua"
-		}
 		reLogin = func() error {
+			if err := authUtil(c, true); err != nil {
+				return err
+			}
 			time.Sleep(5 * time.Second)
-			_ = libauth.LoginLogout(u, settings.Password, host, true, settings.Ip, acID)
-			time.Sleep(5 * time.Second)
-			return libauth.LoginLogout(u, settings.Password, host, false, settings.Ip, acID)
+			return authUtil(c, false)
 		}
 	}
 	err = keepAliveLoop(c, c.Bool("campus-only"), reLogin)
