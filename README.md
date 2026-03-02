@@ -43,7 +43,6 @@ COMMANDS:
          --no-check, -n     skip online checking, always send login request
          --logout, -o       de-auth of the online account (behaves the same as deauth command, for backward-compatibility)
          --ipv6, -6         authenticating for IPv6
-         --campus-only, -C  auth only, no auto-login (v4 only)
          --host value       use customized hostname of srun4000
          --insecure         use http instead of https
          --keep-online, -k  keep online after login
@@ -58,7 +57,6 @@ COMMANDS:
          --ac-id value   use specified ac_id
      online  Keep your computer online
        OPTIONS:
-         --auth, -a  keep the Auth online only
          --ipv6, -6  keep only ipv6 connection online
 
 GLOBAL OPTIONS:
@@ -86,8 +84,7 @@ Write a config file to store your username & password or other options in the fo
   "noCheck": false,
   "insecure": false,
   "daemonize": false,
-  "acId": "",
-  "campusOnly": false
+  "acId": ""
 }
 ```
 

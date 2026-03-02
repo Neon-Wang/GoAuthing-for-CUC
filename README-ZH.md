@@ -44,7 +44,6 @@ COMMANDS:
          --no-check, -n     跳过在线检测，始终发送登录请求
          --logout, -o       登出当前已登录账号（与 deauth 命令相同，保留以兼容旧版）
          --ipv6, -6         IPv6 认证
-         --campus-only, -C  仅校园网认证，不自动外网登录（仅 IPv4）
          --host value       自定义 srun4000 认证服务器主机名
          --insecure         使用 http 而非 https
          --keep-online, -k  登录后保持在线（保活）
@@ -59,7 +58,6 @@ COMMANDS:
          --ac-id value   指定 ac_id
      online   保持本机在线（保活）
        OPTIONS:
-         --auth, -a  仅通过访问校园内网保持认证在线
          --ipv6, -6  仅保持 IPv6 连接在线
 
 GLOBAL OPTIONS:
@@ -87,8 +85,7 @@ GLOBAL OPTIONS:
   "noCheck": false,
   "insecure": false,
   "daemonize": false,
-  "acId": "",
-  "campusOnly": false
+  "acId": ""
 }
 ```
 

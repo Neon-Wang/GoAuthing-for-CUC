@@ -36,7 +36,6 @@ type Settings struct {
 	Daemon   bool   `json:"daemonize"`
 	Debug    bool   `json:"debug"`
 	AcID     string `json:"acId"`
-	Campus   bool   `json:"campusOnly"`
 }
 
 var logger = loggo.GetLogger("auth-cuc")
@@ -98,7 +97,6 @@ func mergeCliSettings(c *cli.Command) {
 	if len(merged.AcID) == 0 {
 		merged.AcID = settings.AcID
 	}
-	merged.Campus = settings.Campus || c.Bool("campus-only")
 	settings = merged
 	logger.Debugf("Settings Username: \"%s\"\n", settings.Username)
 	logger.Debugf("Settings Ip: \"%s\"\n", settings.Ip)
@@ -113,7 +111,6 @@ func mergeCliSettings(c *cli.Command) {
 	logger.Debugf("Settings Daemon: %t\n", settings.Daemon)
 	logger.Debugf("Settings Debug: %t\n", settings.Debug)
 	logger.Debugf("Settings AcID: \"%s\"\n", settings.AcID)
-	logger.Debugf("Settings Campus: %t\n", settings.Campus)
 }
 
 func requestUser() (err error) {
@@ -217,7 +214,7 @@ func runHook(c *cli.Command) {
 }
 
 // reLogin 在连续探活失败时被调用以尝试重新认证；为 nil 则仅重试不自动登录
-func keepAliveLoop(c *cli.Command, campusOnly bool, reLogin func() error) (ret error) {
+func keepAliveLoop(c *cli.Command, reLogin func() error) (ret error) {
 	logger.Infof("Accessing websites periodically to keep you online")
 
 	accessTarget := func(url string, ipv6 bool) (ret error) {
@@ -267,7 +264,7 @@ func keepAliveLoop(c *cli.Command, campusOnly bool, reLogin func() error) (ret e
 	errorCount := 0
 	for {
 		target := targetOutside
-		if campusOnly || settings.V6 {
+		if settings.V6 {
 			target = targetInside
 		}
 		if ret = accessTarget(target, settings.V6); ret != nil {
@@ -346,7 +343,7 @@ func authUtil(c *cli.Command, logout bool) error {
 						return authUtil(c, false)
 					}
 				}
-				return keepAliveLoop(c, settings.Campus, reLogin)
+				return keepAliveLoop(c, reLogin)
 			}
 			return nil
 		} else if !online && logout {
@@ -372,10 +369,6 @@ func authUtil(c *cli.Command, logout bool) error {
 		}
 	}
 
-	if settings.Campus {
-		settings.Username += "@tsinghua"
-	}
-
 	err = libauth.LoginLogout(settings.Username, settings.Password, host, logout, settings.Ip, acID)
 	action := "Login"
 	if logout {
@@ -398,7 +391,7 @@ func authUtil(c *cli.Command, logout bool) error {
 						return authUtil(c, false)
 					}
 				}
-				return keepAliveLoop(c, settings.Campus, reLogin)
+				return keepAliveLoop(c, reLogin)
 			}
 		}
 	} else {
@@ -442,7 +435,7 @@ func cmdKeepalive(ctx context.Context, c *cli.Command) error {
 			return authUtil(c, false)
 		}
 	}
-	err = keepAliveLoop(c, c.Bool("campus-only"), reLogin)
+	err = keepAliveLoop(c, reLogin)
 	if err != nil {
 		logger.Errorf("Keepalive error: %s\n", err)
 		os.Exit(1)
@@ -479,8 +472,7 @@ func main() {
 					&cli.BoolFlag{Name: "no-check", Aliases: []string{"n"}, Usage: "skip online checking, always send login request"},
 					&cli.BoolFlag{Name: "logout", Aliases: []string{"o"}, Usage: "de-auth of the online account (behaves the same as deauth command, for backward-compatibility)"},
 					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "authenticating for IPv6 (net.cuc)"},
-					&cli.BoolFlag{Name: "campus-only", Aliases: []string{"C"}, Usage: "auth only, no auto-login (v4 only)"},
-					&cli.StringFlag{Name: "host", Usage: "use customized hostname of srun4000"},
+						&cli.StringFlag{Name: "host", Usage: "use customized hostname of srun4000"},
 					&cli.BoolFlag{Name: "insecure", Usage: "use http instead of https"},
 					&cli.BoolFlag{Name: "keep-online", Aliases: []string{"k"}, Usage: "keep online after login"},
 					&cli.IntFlag{Name: "keep-online-retry", Aliases: []string{"r"}, Usage: "the repeat times of failed keepAlive requests before keepAliveLoop exits with error. Only available when --keep-online set", Value: 2},
@@ -505,7 +497,6 @@ func main() {
 				Name:  "online",
 				Usage: "Keep your computer online",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "campus-only", Aliases: []string{"C", "auth", "a"}, Usage: "keep alive by requesting in-campus site instead of Internet site"},
 					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "keep only ipv6 connection online"},
 					&cli.IntFlag{Name: "retry", Aliases: []string{"r"}, Usage: "the repeat times of failed keepAlive requests before keepAliveLoop exits with error", Value: 2},
 				},
