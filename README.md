@@ -34,7 +34,7 @@ AUTHORS:
    Jiajie Chen <c@jia.je>
    KomeijiOcean <oceans2000@126.com>
    Sharzy L <me@sharzy.in>
-   Modified by Neon Wang <i@jiashengfan.space>
+   Modified by Neon Wang <lonestar6002@gmail.com>
 
 COMMANDS:
      auth    (default) Auth via net.cuc.edu.cn
