@@ -36,6 +36,7 @@ type Settings struct {
 	Daemon   bool   `json:"daemonize"`
 	Debug    bool   `json:"debug"`
 	AcID     string `json:"acId"`
+	Timeout  int    `json:"timeout"`
 }
 
 var logger = loggo.GetLogger("auth-cuc")
@@ -97,7 +98,14 @@ func mergeCliSettings(c *cli.Command) {
 	if len(merged.AcID) == 0 {
 		merged.AcID = settings.AcID
 	}
+	merged.Timeout = c.Int("timeout")
+	if !c.IsSet("timeout") && settings.Timeout != 0 {
+		merged.Timeout = settings.Timeout
+	}
 	settings = merged
+	if settings.Timeout > 0 {
+		libauth.HttpTimeout = time.Duration(settings.Timeout) * time.Second
+	}
 	logger.Debugf("Settings Username: \"%s\"\n", settings.Username)
 	logger.Debugf("Settings Ip: \"%s\"\n", settings.Ip)
 	logger.Debugf("Settings Host: \"%s\"\n", settings.Host)
@@ -111,6 +119,7 @@ func mergeCliSettings(c *cli.Command) {
 	logger.Debugf("Settings Daemon: %t\n", settings.Daemon)
 	logger.Debugf("Settings Debug: %t\n", settings.Debug)
 	logger.Debugf("Settings AcID: \"%s\"\n", settings.AcID)
+	logger.Debugf("Settings Timeout: %d\n", settings.Timeout)
 }
 
 func requestUser() (err error) {
@@ -451,7 +460,7 @@ func main() {
 	 auth-cuc [options] deauth [auth_options]
 	 auth-cuc [options] online [online_options]`,
 		Usage:    "Authenticating utility for CUC",
-		Version:  "2.3.5",
+		Version:  "2.4.0",
 		HideHelp: true,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "username", Aliases: []string{"u"}, Usage: "your CUC account `name`"},
@@ -459,6 +468,7 @@ func main() {
 			&cli.StringFlag{Name: "config-file", Aliases: []string{"c"}, Usage: "`path` to your config file, default ~/.auth-cuc"},
 			&cli.StringFlag{Name: "hook-success", Usage: "command line to be executed in shell after successful login/out"},
 			&cli.IntFlag{Name: "online-interval", Aliases: []string{"I"}, Usage: "the interval between each keepAlive request (s)", Value: 3},
+			&cli.IntFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "HTTP request timeout in seconds for the auth server", Value: 2},
 			&cli.BoolFlag{Name: "daemonize", Aliases: []string{"D"}, Usage: "run without reading username/password from standard input; less log"},
 			&cli.BoolFlag{Name: "debug", Usage: "print debug messages"},
 			&cli.BoolFlag{Name: "help, h", Usage: "print the help"},
@@ -472,7 +482,7 @@ func main() {
 					&cli.BoolFlag{Name: "no-check", Aliases: []string{"n"}, Usage: "skip online checking, always send login request"},
 					&cli.BoolFlag{Name: "logout", Aliases: []string{"o"}, Usage: "de-auth of the online account (behaves the same as deauth command, for backward-compatibility)"},
 					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "authenticating for IPv6 (net.cuc)"},
-						&cli.StringFlag{Name: "host", Usage: "use customized hostname of srun4000"},
+					&cli.StringFlag{Name: "host", Usage: "use customized hostname of srun4000"},
 					&cli.BoolFlag{Name: "insecure", Usage: "use http instead of https"},
 					&cli.BoolFlag{Name: "keep-online", Aliases: []string{"k"}, Usage: "keep online after login"},
 					&cli.IntFlag{Name: "keep-online-retry", Aliases: []string{"r"}, Usage: "the repeat times of failed keepAlive requests before keepAliveLoop exits with error. Only available when --keep-online set", Value: 2},
