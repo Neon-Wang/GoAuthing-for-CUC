@@ -18,7 +18,7 @@ import (
 	"github.com/juju/loggo"
 	"github.com/urfave/cli/v3"
 
-	"github.com/Neon-Wang/GoAuthing-for-CUC/libauth"
+	"github.com/z4yx/GoAuthing/libauth"
 )
 
 type Settings struct {
@@ -36,7 +36,7 @@ type Settings struct {
 	Daemon   bool   `json:"daemonize"`
 	Debug    bool   `json:"debug"`
 	AcID     string `json:"acId"`
-	Campus   bool   `json:"campusOnly"`
+	Timeout  int    `json:"timeout"`
 }
 
 var logger = loggo.GetLogger("auth-cuc")
@@ -98,8 +98,14 @@ func mergeCliSettings(c *cli.Command) {
 	if len(merged.AcID) == 0 {
 		merged.AcID = settings.AcID
 	}
-	merged.Campus = settings.Campus || c.Bool("campus-only")
+	merged.Timeout = c.Int("timeout")
+	if !c.IsSet("timeout") && settings.Timeout != 0 {
+		merged.Timeout = settings.Timeout
+	}
 	settings = merged
+	if settings.Timeout > 0 {
+		libauth.HttpTimeout = time.Duration(settings.Timeout) * time.Second
+	}
 	logger.Debugf("Settings Username: \"%s\"\n", settings.Username)
 	logger.Debugf("Settings Ip: \"%s\"\n", settings.Ip)
 	logger.Debugf("Settings Host: \"%s\"\n", settings.Host)
@@ -113,7 +119,7 @@ func mergeCliSettings(c *cli.Command) {
 	logger.Debugf("Settings Daemon: %t\n", settings.Daemon)
 	logger.Debugf("Settings Debug: %t\n", settings.Debug)
 	logger.Debugf("Settings AcID: \"%s\"\n", settings.AcID)
-	logger.Debugf("Settings Campus: %t\n", settings.Campus)
+	logger.Debugf("Settings Timeout: %d\n", settings.Timeout)
 }
 
 func requestUser() (err error) {
@@ -216,7 +222,8 @@ func runHook(c *cli.Command) {
 	}
 }
 
-func keepAliveLoop(c *cli.Command, campusOnly bool) (ret error) {
+// reLogin 在连续探活失败时被调用以尝试重新认证；为 nil 则仅重试不自动登录
+func keepAliveLoop(c *cli.Command, reLogin func() error) (ret error) {
 	logger.Infof("Accessing websites periodically to keep you online")
 
 	accessTarget := func(url string, ipv6 bool) (ret error) {
@@ -266,19 +273,30 @@ func keepAliveLoop(c *cli.Command, campusOnly bool) (ret error) {
 	errorCount := 0
 	for {
 		target := targetOutside
-		if campusOnly || settings.V6 {
+		if settings.V6 {
 			target = targetInside
 		}
 		if ret = accessTarget(target, settings.V6); ret != nil {
 			errorCount++
 			if errorCount >= settings.OnRetry {
-				ret = fmt.Errorf("keepAlive request error (re-login might be required): %w\n", ret)
-				break
+				if reLogin != nil {
+					logger.Infof("keepAlive failed repeatedly, attempting deauth then auth...\n")
+					if err := reLogin(); err != nil {
+						logger.Warningf("deauth/auth failed: %s (will keep retrying)\n", err)
+					} else {
+						logger.Infof("deauth and auth succeeded, resuming keep-alive\n")
+						errorCount = 0
+					}
+				} else {
+					logger.Warningf("keepAlive request error (re-login might be required, will keep retrying): %s\n", ret)
+				}
+				errorCount = settings.OnRetry // 不再增加，避免溢出
 			} else {
 				logger.Infof("keepAlive request error (will retry): %s\n", ret)
 			}
 		} else {
 			errorCount = 0
+			logger.Infof("keepAlive request succeeded\n")
 		}
 		// Consumes ~5MB per day when settings.OnIntrvl == 3
 		time.Sleep(time.Duration(settings.OnIntrvl) * time.Second)
@@ -324,7 +342,17 @@ func authUtil(c *cli.Command, logout bool) error {
 		if online && !logout {
 			logger.Infof("Currently online!")
 			if settings.KeepOn {
-				return keepAliveLoop(c, settings.Campus)
+				var reLogin func() error
+				if settings.Username != "" && settings.Password != "" {
+					reLogin = func() error {
+						if err := authUtil(c, true); err != nil {
+							return err
+						}
+						time.Sleep(5 * time.Second)
+						return authUtil(c, false)
+					}
+				}
+				return keepAliveLoop(c, reLogin)
 			}
 			return nil
 		} else if !online && logout {
@@ -350,10 +378,6 @@ func authUtil(c *cli.Command, logout bool) error {
 		}
 	}
 
-	if settings.Campus {
-		settings.Username += "@tsinghua"
-	}
-
 	err = libauth.LoginLogout(settings.Username, settings.Password, host, logout, settings.Ip, acID)
 	action := "Login"
 	if logout {
@@ -366,7 +390,17 @@ func authUtil(c *cli.Command, logout bool) error {
 			if len(settings.Ip) != 0 {
 				logger.Errorf("Cannot keep another IP online\n")
 			} else {
-				return keepAliveLoop(c, settings.Campus)
+				var reLogin func() error
+				if settings.Username != "" && settings.Password != "" {
+					reLogin = func() error {
+						if err := authUtil(c, true); err != nil {
+							return err
+						}
+						time.Sleep(5 * time.Second)
+						return authUtil(c, false)
+					}
+				}
+				return keepAliveLoop(c, reLogin)
 			}
 		}
 	} else {
@@ -400,7 +434,17 @@ func cmdKeepalive(ctx context.Context, c *cli.Command) error {
 		logger.Errorf("Parse setting error: %s\n", err)
 		os.Exit(1)
 	}
-	err = keepAliveLoop(c, c.Bool("campus-only"))
+	var reLogin func() error
+	if settings.Username != "" && settings.Password != "" {
+		reLogin = func() error {
+			if err := authUtil(c, true); err != nil {
+				return err
+			}
+			time.Sleep(5 * time.Second)
+			return authUtil(c, false)
+		}
+	}
+	err = keepAliveLoop(c, reLogin)
 	if err != nil {
 		logger.Errorf("Keepalive error: %s\n", err)
 		os.Exit(1)
@@ -416,7 +460,7 @@ func main() {
 	 auth-cuc [options] deauth [auth_options]
 	 auth-cuc [options] online [online_options]`,
 		Usage:    "Authenticating utility for CUC",
-		Version:  "2.3.5",
+		Version:  "2.4.0",
 		HideHelp: true,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "username", Aliases: []string{"u"}, Usage: "your CUC account `name`"},
@@ -424,6 +468,7 @@ func main() {
 			&cli.StringFlag{Name: "config-file", Aliases: []string{"c"}, Usage: "`path` to your config file, default ~/.auth-cuc"},
 			&cli.StringFlag{Name: "hook-success", Usage: "command line to be executed in shell after successful login/out"},
 			&cli.IntFlag{Name: "online-interval", Aliases: []string{"I"}, Usage: "the interval between each keepAlive request (s)", Value: 3},
+			&cli.IntFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "HTTP request timeout in seconds for the auth server", Value: 2},
 			&cli.BoolFlag{Name: "daemonize", Aliases: []string{"D"}, Usage: "run without reading username/password from standard input; less log"},
 			&cli.BoolFlag{Name: "debug", Usage: "print debug messages"},
 			&cli.BoolFlag{Name: "help, h", Usage: "print the help"},
@@ -437,7 +482,6 @@ func main() {
 					&cli.BoolFlag{Name: "no-check", Aliases: []string{"n"}, Usage: "skip online checking, always send login request"},
 					&cli.BoolFlag{Name: "logout", Aliases: []string{"o"}, Usage: "de-auth of the online account (behaves the same as deauth command, for backward-compatibility)"},
 					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "authenticating for IPv6 (net.cuc)"},
-					&cli.BoolFlag{Name: "campus-only", Aliases: []string{"C"}, Usage: "auth only, no auto-login (v4 only)"},
 					&cli.StringFlag{Name: "host", Usage: "use customized hostname of srun4000"},
 					&cli.BoolFlag{Name: "insecure", Usage: "use http instead of https"},
 					&cli.BoolFlag{Name: "keep-online", Aliases: []string{"k"}, Usage: "keep online after login"},
@@ -463,7 +507,6 @@ func main() {
 				Name:  "online",
 				Usage: "Keep your computer online",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "campus-only", Aliases: []string{"C", "auth", "a"}, Usage: "keep alive by requesting in-campus site instead of Internet site"},
 					&cli.BoolFlag{Name: "ipv6", Aliases: []string{"6"}, Usage: "keep only ipv6 connection online"},
 					&cli.IntFlag{Name: "retry", Aliases: []string{"r"}, Usage: "the repeat times of failed keepAlive requests before keepAliveLoop exits with error", Value: 2},
 				},
